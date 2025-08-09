@@ -17,8 +17,8 @@ Download and install the latest release:
 # Download the .deb package
 curl -LO https://github.com/md-arif-islam/quickcommands/releases/latest/download/quickcommands.deb
 
-# Install
-sudo dpkg -i quickcommands.deb
+# Install (uses APT for dependency resolution e.g. fzf)
+sudo apt install ./quickcommands.deb
 
 # Activate in current terminal
 source ~/.bashrc
