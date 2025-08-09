@@ -1,0 +1,11 @@
+Package: quickcommands
+Version: 1.0.0
+Section: utils
+Priority: optional
+Architecture: all
+Depends: bash, fzf
+Maintainer: Arif Islam <arifislamdev@gmail.com>
+Description: Smart command manager for terminal productivity
+ Quick access to frequently used terminal commands with intelligent search.
+ Features Ctrl+R for instant access, Ctrl+S to save, Ctrl+D to delete,
+ and seamless command execution. Perfect for developers and power users.

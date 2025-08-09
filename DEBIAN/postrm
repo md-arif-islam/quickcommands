@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -e
+
+echo "savedcmd removed successfully!"
+echo ""
+echo "Your saved commands file (~/.saved_commands) has been preserved."
+echo "To remove it too: rm ~/.saved_commands"
+echo ""
+echo "📋 Please restart your terminal or run 'source ~/.bashrc' to complete removal."

@@ -1,0 +1,247 @@
+#!/usr/bin/env bash
+
+# Configuration
+SAVE_FILE="$HOME/.saved_commands"
+
+show_help() {
+  cat << EOF
+QuickCommands - Smart command manager for terminal productivity
+
+Usage:
+  quickcommands <command> [args]
+  Ctrl+R                       # Interactive interface (pick/save/delete)
+
+Commands:
+  pick                        # Interactive command picker
+  save <command>             # Save a command 
+  list                       # List all saved commands (numbered)
+  run <index>                # Run command by index number
+  delete                     # Interactive command deletion
+  edit                       # Edit commands file directly
+  rm <index>                 # Remove command by index
+  clear                      # Clear all commands
+  path                       # Print the save-file path
+  help                       # Show this help
+
+Examples:
+  Ctrl+R                      # Open interactive interface
+  quickcommands save "git status"
+  quickcommands save "docker ps -a"
+  quickcommands list
+  quickcommands run 1
+
+Interactive Interface (Ctrl+R):
+  ↑↓ Arrow Keys               Navigate commands
+  Enter                       Fill terminal with selected command
+  Ctrl+S                      Save what you type
+  Ctrl+D                      Delete selected command  
+  Ctrl+C                      Exit/Cancel
+
+Quick access to frequently used terminal commands with intelligent search.
+Features Ctrl+R for instant access, Ctrl+S to save, Ctrl+D to delete,
+and seamless command execution. Perfect for developers and power users.
+Commands are stored in: $SAVE_FILE
+EOF
+}
+
+ensure_file() {
+  [[ -f "$SAVE_FILE" ]] || touch "$SAVE_FILE"
+}
+
+pick_cmd() {
+  ensure_file
+  command -v fzf >/dev/null || { echo "fzf not found. Install with: sudo apt install fzf"; exit 1; }
+  
+  # Add default commands if file is empty
+  if [[ ! -s "$SAVE_FILE" ]]; then
+    echo "echo hello" > "$SAVE_FILE"
+    echo "whoami" >> "$SAVE_FILE"
+  fi
+  
+  while true; do
+    # Create temp files to capture actions
+    local temp_save="/tmp/saved_save_$$"
+    local temp_delete="/tmp/saved_delete_$$"
+    
+    # Prepare content - show message if empty
+    local content
+    if [[ ! -s "$SAVE_FILE" ]]; then
+      content="No commands found. Write your first command and press Ctrl+S"
+    else
+      content="$(cat "$SAVE_FILE")"
+    fi
+    
+    # Use fzf with binds for both Ctrl+S (save) and Ctrl+D (delete)
+    local selection
+    selection="$(echo "$content" | fzf \
+      --prompt="COMMANDS> " \
+      --header="Type to search | Enter: RUN | Ctrl+S: SAVE | Ctrl+D: DELETE selected | Ctrl+C: Exit" \
+      --bind="ctrl-s:execute-silent(echo {q} > $temp_save)+abort" \
+      --bind="ctrl-d:execute-silent(echo {} > $temp_delete)+abort" \
+      --no-clear \
+      --query='')" || {
+      
+      # Check if Ctrl+S was pressed (save what you type)
+      if [[ -f "$temp_save" ]]; then
+        local typed_command=$(cat "$temp_save")
+        rm -f "$temp_save"
+        
+        if [[ -n "$typed_command" ]]; then
+          if ! grep -Fxq "$typed_command" "$SAVE_FILE" 2>/dev/null; then
+            echo "$typed_command" >> "$SAVE_FILE"
+          fi
+        fi
+        clear
+        continue
+      fi
+      
+      # Check if Ctrl+D was pressed (delete selected)
+      if [[ -f "$temp_delete" ]]; then
+        local selected_command=$(cat "$temp_delete")
+        rm -f "$temp_delete"
+        
+        # Don't delete the "no commands" message
+        if [[ -n "$selected_command" && "$selected_command" != "No commands found. Write your first command and press Ctrl+S" ]]; then
+          # Show delete confirmation in full fzf window
+          local confirm_result
+          confirm_result="$(echo -e "YES - Delete: $selected_command\nNO - Keep: $selected_command" | fzf \
+            --prompt="DELETE> " \
+            --header="Are you sure you want to delete this command?" \
+            --no-multi \
+            --no-clear)" || continue
+          
+          if [[ "$confirm_result" == "YES - Delete: $selected_command" ]]; then
+            # Use a more reliable deletion method
+            local temp_file="${SAVE_FILE}.tmp"
+            > "$temp_file"  # Create empty temp file
+            
+            # Copy all lines except the one to delete
+            while IFS= read -r line; do
+              if [[ "$line" != "$selected_command" ]]; then
+                echo "$line" >> "$temp_file"
+              fi
+            done < "$SAVE_FILE"
+            
+            mv "$temp_file" "$SAVE_FILE"
+          fi
+        fi
+        clear
+        continue
+      fi
+      
+      # Normal exit (Ctrl+C or Escape)
+      return 0
+    }
+    
+    # Normal selection - show command in terminal format (but not the "no commands" message)  
+    if [[ -n "$selection" && "$selection" != "No commands found. Write your first command and press Ctrl+S" ]]; then
+      clear
+      # Try to use PROMPT_COMMAND to inject the command
+      export QUICKCOMMANDS_INJECT="$selection"
+      # Exit with special code to signal parent
+      exit 99
+    fi
+  done
+}
+
+save_cmd() {
+  ensure_file
+  local cmd="$*"
+  
+  # Don't save empty commands
+  [[ -n "$cmd" ]] || { echo "Cannot save empty command"; exit 1; }
+  
+  # Don't save duplicates
+  if grep -Fxq "$cmd" "$SAVE_FILE" 2>/dev/null; then
+    echo "⚠ Command already saved: $cmd"
+    return 0
+  fi
+  
+  echo "$cmd" >> "$SAVE_FILE"
+  echo "✓ Saved: $cmd"
+}
+
+list_cmd() {
+  ensure_file; nl -w2 -s". " "$SAVE_FILE"
+}
+
+run_index() {
+  ensure_file
+  local idx="${1:-}"; [[ -n "$idx" ]] || { echo "Index required"; exit 1; }
+  local cmd
+  cmd="$(sed -n "${idx}p" "$SAVE_FILE" || true)"
+  [[ -n "$cmd" ]] || { echo "No command at index $idx"; exit 1; }
+  echo "> $cmd"
+  eval "$cmd"
+}
+
+rm_cmd() {
+  ensure_file
+  local idx="${1:-}"; [[ -n "$idx" ]] || { echo "Index required"; exit 1; }
+  sed -i "${idx}d" "$SAVE_FILE"
+  echo "Removed entry $idx"
+}
+
+edit_cmd() { ensure_file; "${EDITOR:-nano}" "$SAVE_FILE"; }
+
+delete_cmd() {
+  ensure_file
+  command -v fzf >/dev/null || { echo "fzf not found"; exit 1; }
+  
+  # Create temp file with line numbers for deletion
+  local temp_file=$(mktemp)
+  nl -w2 -s". " "$SAVE_FILE" > "$temp_file"
+  
+  # Let user pick command to delete
+  local selected
+  selected="$(cat "$temp_file" | fzf --prompt="DELETE> " --header="Select command to DELETE (ESC to cancel)" || true)"
+  rm "$temp_file"
+  
+  [[ -n "$selected" ]] || { echo "Cancelled"; exit 0; }
+  
+  # Extract line number and command
+  local line_num=$(echo "$selected" | cut -d'.' -f1 | tr -d ' ')
+  local cmd_text=$(echo "$selected" | cut -d'.' -f2- | sed 's/^ //')
+  
+  # Confirm deletion
+  echo "Delete this command? $cmd_text"
+  echo -n "Type 'y' to confirm: "
+  read -r confirm
+  
+  if [[ "$confirm" == "y" || "$confirm" == "Y" ]]; then
+    sed -i "${line_num}d" "$SAVE_FILE"
+    echo "✓ Deleted: $cmd_text"
+  else
+    echo "Cancelled"
+  fi
+}
+
+clear_cmd() {
+  ensure_file
+  local count=$(wc -l < "$SAVE_FILE")
+  echo "This will delete ALL $count saved commands."
+  echo -n "Type 'yes' to confirm: "
+  read -r confirm
+  
+  if [[ "$confirm" == "yes" ]]; then
+    > "$SAVE_FILE"
+    echo "✓ All commands cleared"
+  else
+    echo "Cancelled"
+  fi
+}
+
+# Main command dispatcher
+case "${1:-pick}" in
+  pick|p) pick_cmd "${@:2}" ;;
+  save|s) shift; [[ $# -gt 0 ]] || { echo "Provide a command to save"; exit 1; }; save_cmd "$*";;
+  list|l) list_cmd ;;
+  run) shift; run_index "${1:-}";;
+  delete|d) delete_cmd ;;
+  edit|e) edit_cmd ;;
+  rm) shift; rm_cmd "${1:-}";;
+  clear|c) clear_cmd ;;
+  path) echo "$SAVE_FILE";;
+  help|h|--help|-h) show_help ;;
+  *) echo "Unknown command: $1. Use 'quickcommands help' for usage."; exit 1 ;;
+esac

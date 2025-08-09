@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+set -e
+
+echo "quickcommands installed successfully!"
+echo ""
+
+# Ensure the profile script has proper permissions
+chmod 644 /etc/profile.d/quickcommands.sh
+
+# Add to all users' bashrc for reliable loading (Ubuntu sometimes doesn't auto-source profile.d)
+for user_home in /home/*; do
+    if [ -d "$user_home" ] && [ -f "$user_home/.bashrc" ]; then
+        username=$(basename "$user_home")
+        # Check if already added to avoid duplicates
+        if ! grep -q "source /etc/profile.d/quickcommands.sh" "$user_home/.bashrc" 2>/dev/null; then
+            echo "" >> "$user_home/.bashrc"
+            echo "# Added by quickcommands package" >> "$user_home/.bashrc" 
+            echo "source /etc/profile.d/quickcommands.sh" >> "$user_home/.bashrc"
+            chown "$username:$username" "$user_home/.bashrc" 2>/dev/null || true
+        fi
+    fi
+done
+
+# Also add to root's bashrc
+if [ -f "/root/.bashrc" ] && ! grep -q "source /etc/profile.d/quickcommands.sh" "/root/.bashrc" 2>/dev/null; then
+    echo "" >> "/root/.bashrc"
+    echo "# Added by quickcommands package" >> "/root/.bashrc"
+    echo "source /etc/profile.d/quickcommands.sh" >> "/root/.bashrc"
+fi
+
+echo "Quick start:"
+echo "  Ctrl+R               # Interactive command manager"
+echo ""
+echo "Ctrl+R Interface:"
+echo "  ↑↓ Navigate | Enter: FILL | Ctrl+D: DELETE | Ctrl+S: SAVE | Ctrl+C: Exit"
+echo ""
+echo "All commands: quickcommands --help"
+echo ""
+echo "✅ Installation complete!"
+echo ""
+echo "🔄 To activate in your CURRENT terminal, run:"
+echo "    source ~/.bashrc"
+echo ""
+echo "📋 Or close this terminal and open a new one."
+echo ""
+echo "Then test with: Ctrl+R"

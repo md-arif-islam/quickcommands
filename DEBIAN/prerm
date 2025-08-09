@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -e
+
+echo "Removing quickcommands aliases from user bashrc files..."
+
+# Remove from all users' bashrc files
+for user_home in /home/*; do
+    if [ -d "$user_home" ] && [ -f "$user_home/.bashrc" ]; then
+        # Remove the lines added by quickcommands package
+        sed -i '/# Added by quickcommands package/d' "$user_home/.bashrc" 2>/dev/null || true
+        sed -i '\|source /etc/profile.d/quickcommands.sh|d' "$user_home/.bashrc" 2>/dev/null || true
+        # Remove empty lines left behind
+        sed -i '/^$/N;/^\n$/d' "$user_home/.bashrc" 2>/dev/null || true
+    fi
+done
+
+# Also remove from root's bashrc
+if [ -f "/root/.bashrc" ]; then
+    sed -i '/# Added by quickcommands package/d' "/root/.bashrc" 2>/dev/null || true
+    sed -i '\|source /etc/profile.d/quickcommands.sh|d' "/root/.bashrc" 2>/dev/null || true
+    sed -i '/^$/N;/^\n$/d' "/root/.bashrc" 2>/dev/null || true
+fi
+
+echo "✓ Cleaned up bashrc files"
