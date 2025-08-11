@@ -93,9 +93,9 @@ _quickcommands_fill_readline() {
 
 
 
-# Bind Ctrl+R to the readline function
-if [[ -n "$BASH_VERSION" ]]; then
-  bind -x '"\C-r": "_quickcommands_fill_readline"'
+# Bind Ctrl+R to the readline function (only in interactive shells)
+if [[ -n "$BASH_VERSION" && "$-" == *i* ]]; then
+  bind -x '"\C-r": "_quickcommands_fill_readline"' 2>/dev/null
 fi
 
 # Main aliases for quickcommands
